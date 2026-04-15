@@ -68,7 +68,7 @@ All processing happens **client-side**, with **no external APIs**.
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/your-username/medialens.git
+   git clone https://github.com/AARUSHGAUR/medialens.git
    cd medialens
    ```
 
