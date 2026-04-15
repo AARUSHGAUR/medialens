@@ -2,7 +2,7 @@
 
 MediaLens is a lightweight, browser-based tool that analyzes news articles to detect **political bias, emotional tone, and credibility** using rule-based NLP techniques.
 
-🔗 Live Demo: https://your-vercel-link.vercel.app
+🔗 Live Demo: https://medialens-tau.vercel.app/
 
 ---
 
