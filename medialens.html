@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MediaLens — News Bias Detector</title>
+
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --black:#0d0d0b;--white:#f5f3ee;--cream:#ede9e0;--cream2:#e2ddd3;
+  --red:#c0392b;--blue:#1a3a6b;--amber:#b06000;--green:#1a4d2e;
+  --border:rgba(13,13,11,0.14);--border-hard:rgba(13,13,11,0.5);
+}
+html{font-size:16px;-webkit-font-smoothing:antialiased}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--white);color:var(--black);min-height:100vh}
+
+/* ── TICKER ── */
+.ticker-wrap{background:var(--black);overflow:hidden;height:28px;display:flex;align-items:center;flex-shrink:0}
+.ticker-label{background:var(--red);color:#fff;font-family:monospace;font-size:.58rem;font-weight:600;letter-spacing:.05em;padding:0 .75rem;height:100%;display:flex;align-items:center;white-space:nowrap;flex-shrink:0}
+.ticker-scroll{overflow:hidden;flex:1}
+.ticker-track{display:flex;animation:ticker 32s linear infinite;white-space:nowrap}
+.ticker-item{font-family:monospace;font-size:.58rem;letter-spacing:.02em;padding:0 1.5rem;color:rgba(245,243,238,.55)}
+.ticker-item b{color:var(--red);margin-right:.35rem}
+@keyframes ticker{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+/* ── MASTHEAD ── */
+.masthead{border-bottom:3px double var(--black);padding:1.5rem 2rem 1rem;text-align:center}
+.masthead-eyebrow{font-family:monospace;font-size:.56rem;letter-spacing:.05em;text-transform:uppercase;opacity:.4;margin-bottom:.2rem}
+.masthead-title{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;font-weight:600;font-size:clamp(3.5rem,10vw,7rem);letter-spacing:.5px;line-height:.92}
+.masthead-title .r{color:var(--red)}
+.masthead-sub{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;font-weight:400;font-size:.95rem;opacity:.48;margin-top:.4rem}
+.masthead-meta{display:flex;justify-content:space-between;align-items:center;margin-top:.75rem;padding-top:.75rem;border-top:1px solid var(--border);font-family:monospace;font-size:.56rem;letter-spacing:.02em;opacity:.38;flex-wrap:wrap;gap:.4rem}
+.sdg-tag{display:inline-flex;align-items:center;background:var(--black);color:var(--white);font-family:monospace;font-size:.52rem;letter-spacing:.03em;padding:.18rem .55rem;border-radius:2px}
+
+/* ── LAYOUT ── */
+.container{max-width:860px;margin:0 auto;padding:2rem 1.5rem}
+.sec-label{font-family:monospace;font-size:12px;letter-spacing:.05em;text-transform:uppercase;opacity:.38;margin-bottom:.5rem;display:flex;align-items:center;gap:.5rem}
+.sec-label::after{content:'';flex:1;height:1px;background:var(--border)}
+
+/* ── INPUT ── */
+.input-wrap{border:2px solid var(--black);border-radius:3px;overflow:hidden;margin-bottom:.875rem;background:#fff}
+.input-header{background:var(--black);color:var(--white);padding:.5rem 1rem;display:flex;align-items:center;justify-content:space-between}
+.input-header-label{font-family:monospace;font-size:12px;letter-spacing:.03em;text-transform:uppercase;opacity:.6}
+#charCount{font-family:monospace;font-size:12px;opacity:.4}
+textarea{width:100%;min-height:164px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;font-weight:400;font-size:1rem;line-height:1.8;color:var(--black);background:#fff;border:none;outline:none;padding:1.25rem;resize:vertical}
+textarea::placeholder{color:var(--black);opacity:.2}
+
+/* ── BUTTON ── */
+.btn-analyze{width:100%;padding:1rem;background:var(--black);color:var(--white);border:2px solid var(--black);border-radius:3px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;font-weight:600;font-size:1rem;letter-spacing:.5px;cursor:pointer;transition:background .15s,transform .1s;margin-bottom:2rem;display:flex;align-items:center;justify-content:center;gap:.75rem}
+.btn-analyze:hover{background:var(--red);border-color:var(--red)}
+.btn-analyze:active{transform:scale(.998)}
+
+/* ── ERROR ── */
+.error-box{background:#fef2f2;border:1.5px solid #c0392b;border-radius:3px;padding:.875rem 1rem;color:#7a1f15;font-family:monospace;font-size:12px;line-height:1.6;margin-bottom:1.5rem;display:none}
+
+/* ── RESULTS ── */
+#results{display:none}
+.results-header{border-top:4px solid var(--black);border-bottom:1px solid var(--border);padding:1rem 0;margin-bottom:1.5rem;display:flex;align-items:baseline;justify-content:space-between;gap:1rem;flex-wrap:wrap}
+.results-headline{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;font-weight:600;font-size:2rem;letter-spacing:.5px;line-height:1}
+.results-ts{font-family:monospace;font-size:12px;letter-spacing:.02em;opacity:.38}
+
+/* ── VERDICT STRIP ── */
+.verdict-strip{display:flex;border:2px solid var(--black);border-radius:3px;overflow:hidden;margin-bottom:1.5rem}
+.verdict-main{flex:1;padding:1.25rem 1.5rem;background:var(--black);color:var(--white)}
+.v-label{font-family:monospace;font-size:12px;letter-spacing:.03em;text-transform:uppercase;opacity:.42;margin-bottom:.2rem}
+.v-text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;font-weight:600;font-size:2.25rem;letter-spacing:.5px;line-height:1}
+.verdict-side{padding:1.25rem 1.5rem;background:var(--cream);display:flex;flex-direction:column;justify-content:center;min-width:150px;border-left:2px solid var(--black)}
+.cred-num{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;font-weight:600;font-size:3rem;line-height:1;margin-bottom:.1rem}
+.cred-lbl{font-family:monospace;font-size:12px;letter-spacing:.03em;text-transform:uppercase;opacity:.42}
+
+/* ── METER ── */
+.meter-wrap{background:var(--cream);border:1.5px solid var(--border-hard);border-radius:3px;padding:1.25rem 1.5rem;margin-bottom:1.5rem}
+.meter-labels{display:flex;justify-content:space-between;font-family:monospace;font-size:12px;letter-spacing:.03em;text-transform:uppercase;margin-bottom:.6rem}
+.meter-track{height:6px;border-radius:3px;background:linear-gradient(to right,#1a3a6b,#888,#b06000);position:relative;margin-bottom:.6rem}
+.meter-needle{position:absolute;top:50%;transform:translate(-50%,-50%);width:16px;height:16px;border-radius:50%;background:var(--black);border:3px solid var(--white);box-shadow:0 0 0 1.5px var(--black);transition:left 1.1s cubic-bezier(.34,1.56,.64,1)}
+.meter-reading{text-align:center;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;font-weight:600;font-size:1.1rem;letter-spacing:.5px;opacity:.6}
+
+/* ── METRICS GRID ── */
+.metrics-grid{display:grid;grid-template-columns:repeat(4,1fr);border:1.5px solid var(--border-hard);border-radius:3px;overflow:hidden;margin-bottom:1.5rem;background:#fff}
+@media(max-width:560px){.metrics-grid{grid-template-columns:repeat(2,1fr)}}
+.metric-cell{padding:1rem;border-right:1px solid var(--border-hard)}
+.metric-cell:last-child{border-right:none}
+.mc-label{font-family:monospace;font-size:12px;letter-spacing:.03em;text-transform:uppercase;opacity:.38;margin-bottom:.3rem}
+.mc-val{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;font-weight:600;font-size:2.25rem;line-height:1;margin-bottom:.08rem}
+.mc-sub{font-family:monospace;font-size:11px;opacity:.32;margin-bottom:.5rem}
+.mc-track{height:2px;background:var(--cream2);border-radius:1px;overflow:hidden}
+.mc-fill{height:100%;border-radius:1px;transition:width 1.3s ease;width:0}
+
+/* ── TWO COL ── */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem}
+@media(max-width:560px){.two-col{grid-template-columns:1fr}}
+
+/* ── CARDS ── */
+.card{border:1.5px solid var(--border-hard);border-radius:3px;overflow:hidden;background:#fff}
+.card-head{background:var(--cream);border-bottom:1px solid var(--border-hard);padding:.5rem 1rem;font-family:monospace;font-size:12px;letter-spacing:.03em;text-transform:uppercase;opacity:.52}
+.card-body{padding:1rem}
+.card-text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;font-weight:400;font-size:.9375rem;line-height:1.75;opacity:.78}
+
+/* ── WORD PILLS ── */
+.word-cloud{display:flex;flex-wrap:wrap;gap:.4rem}
+.word-pill{font-family:monospace;font-size:12px;letter-spacing:.02em;padding:.25rem .5rem;border-radius:2px;border:1px solid var(--border)}
+.word-pill.high{background:#fee2e2;color:#7a1f15;border-color:#fca5a5}
+.word-pill.med{background:#fef3c7;color:#78350f;border-color:#fcd34d}
+.word-pill.low{background:#dbeafe;color:#1e3a8a;border-color:#93c5fd}
+.word-pill.neutral{background:var(--cream);color:var(--black);opacity:.55}
+
+/* ── PERSPECTIVES ── */
+.perspective-list{list-style:none}
+.perspective-list li{padding:.5rem 0;border-bottom:1px solid var(--border);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;font-weight:400;font-size:.9rem;line-height:1.6;opacity:.72;display:flex;gap:.6rem;align-items:flex-start}
+.perspective-list li:last-child{border-bottom:none}
+.pdot{width:5px;height:5px;background:var(--red);border-radius:50%;margin-top:7px;flex-shrink:0}
+
+/* ── HEADLINE BADGE ── */
+.hl-badge{display:inline-block;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;font-weight:600;font-size:1rem;letter-spacing:.5px;padding:.2rem .75rem;border-radius:2px;margin-bottom:.625rem}
+
+/* ── RECO CARD ── */
+.reco-card{border:2px solid var(--black);border-radius:3px;overflow:hidden;margin-bottom:1.5rem}
+.reco-head{background:var(--black);color:var(--white);padding:.5rem 1rem;font-family:monospace;font-size:12px;letter-spacing:.03em;text-transform:uppercase}
+.reco-body{padding:1.25rem;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;font-weight:400;font-size:.9875rem;line-height:1.8;opacity:.82}
+
+/* ── FOOTER ── */
+.footer{border-top:3px double var(--black);padding-top:1rem;margin-top:1rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem}
+.footer-brand{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;font-weight:600;font-size:1.1rem;letter-spacing:.5px;opacity:.42}
+.footer-note{font-family:monospace;font-size:11px;letter-spacing:.02em;opacity:.28;max-width:340px;line-height:1.6;text-align:right}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.fade-up{animation:fadeUp .4s ease forwards}
+</style>
+</head>
+<body>
+
+<!-- TICKER
+<div class="ticker-wrap">
+  <div class="ticker-label">LIVE</div>
+  <div class="ticker-scroll">
+    <div class="ticker-track">
+      <span class="ticker-item"><b>◆</b>AI-powered bias detection</span>
+      <span class="ticker-item"><b>◆</b>Political lean analysis</span>
+      <span class="ticker-item"><b>◆</b>Emotional language scoring</span>
+      <span class="ticker-item"><b>◆</b>Missing perspectives</span>
+      <span class="ticker-item"><b>◆</b>Headline vs content check</span>
+      <span class="ticker-item"><b>◆</b>Credibility scoring</span>
+      <span class="ticker-item"><b>◆</b>100% offline — no API needed</span>
+      <span class="ticker-item"><b>◆</b>SDG 16 — Peace, Justice &amp; Strong Institutions</span>
+      <span class="ticker-item"><b>◆</b>AI-powered bias detection</span>
+      <span class="ticker-item"><b>◆</b>Political lean analysis</span>
+      <span class="ticker-item"><b>◆</b>Emotional language scoring</span>
+      <span class="ticker-item"><b>◆</b>Missing perspectives</span>
+      <span class="ticker-item"><b>◆</b>Headline vs content check</span>
+      <span class="ticker-item"><b>◆</b>Credibility scoring</span>
+      <span class="ticker-item"><b>◆</b>100% offline — no API needed</span>
+      <span class="ticker-item"><b>◆</b>SDG 16 — Peace, Justice &amp; Strong Institutions</span>
+    </div>
+  </div>
+</div> -->
+
+<!-- MASTHEAD -->
+<div class="masthead">
+  <div class="masthead-eyebrow">Est. 2025 &nbsp;·&nbsp; Open Elective — Intro to AI &amp; DS &nbsp;·&nbsp; Vol. I</div>
+  <div class="masthead-title">Media<span class="r">Lens</span></div>
+  <div class="masthead-sub">The truth is in the language — if you know where to look.</div>
+  <div class="masthead-meta">
+    <span id="todayDate">—</span>
+    <div style="display:flex;gap:.4rem">
+      <span class="sdg-tag">SDG 16</span>
+      <span class="sdg-tag">SDG 9</span>
+    </div>
+    <span>NLP Keyword Engine v1.0</span>
+  </div>
+</div>
+
+<div class="container">
+
+  <div class="sec-label">Article Input</div>
+  <div class="input-wrap">
+    <div class="input-header">
+      <span class="input-header-label">Paste article, headline, or paragraph</span>
+      <span id="charCount">0 chars</span>
+    </div>
+    <textarea id="articleInput" placeholder="Paste any news article here. MediaLens will detect political lean, emotional language, loaded words, missing perspectives and more…"></textarea>
+  </div>
+
+  <button class="btn-analyze" onclick="analyzeArticle()">
+    <span id="btnText">Run Bias Analysis</span>
+  </button>
+
+  <div class="error-box" id="errorBox"></div>
+
+  <!-- RESULTS -->
+  <div id="results">
+
+    <div class="results-header fade-up">
+      <div class="results-headline">Analysis Report</div>
+      <div class="results-ts" id="analysisTime">—</div>
+    </div>
+
+    <div class="verdict-strip fade-up">
+      <div class="verdict-main">
+        <div class="v-label">Overall Bias Detected</div>
+        <div class="v-text" id="verdictText">—</div>
+      </div>
+      <div class="verdict-side">
+        <div class="v-label">Credibility</div>
+        <div class="cred-num" id="credScore">—</div>
+        <div class="cred-lbl" id="credLabel">—</div>
+      </div>
+    </div>
+
+    <div class="meter-wrap fade-up">
+      <div class="sec-label" style="margin-bottom:.75rem">Political Lean Spectrum</div>
+      <div class="meter-labels">
+        <span style="color:var(--blue)">◀ Left</span>
+        <span style="opacity:.38">Center</span>
+        <span style="color:var(--amber)">Right ▶</span>
+      </div>
+      <div class="meter-track">
+        <div class="meter-needle" id="meterNeedle" style="left:50%"></div>
+      </div>
+      <div class="meter-reading" id="meterReading">—</div>
+    </div>
+
+    <div class="sec-label">Scoring Breakdown</div>
+    <div class="metrics-grid fade-up">
+      <div class="metric-cell">
+        <div class="mc-label">Emotional</div>
+        <div class="mc-val" id="mEmotional">—</div>
+        <div class="mc-sub">out of 10</div>
+        <div class="mc-track"><div class="mc-fill" id="bEmotional" style="background:#ef4444"></div></div>
+      </div>
+      <div class="metric-cell">
+        <div class="mc-label">Factual</div>
+        <div class="mc-val" id="mFactual">—</div>
+        <div class="mc-sub">out of 10</div>
+        <div class="mc-track"><div class="mc-fill" id="bFactual" style="background:#22c55e"></div></div>
+      </div>
+      <div class="metric-cell">
+        <div class="mc-label">Sensational</div>
+        <div class="mc-val" id="mSensational">—</div>
+        <div class="mc-sub">out of 10</div>
+        <div class="mc-track"><div class="mc-fill" id="bSensational" style="background:#f59e0b"></div></div>
+      </div>
+      <div class="metric-cell">
+        <div class="mc-label">Balanced</div>
+        <div class="mc-val" id="mBalance">—</div>
+        <div class="mc-sub">out of 10</div>
+        <div class="mc-track"><div class="mc-fill" id="bBalance" style="background:#3b82f6"></div></div>
+      </div>
+    </div>
+
+    <div class="two-col fade-up">
+      <div class="card">
+        <div class="card-head">Loaded / Biased Words</div>
+        <div class="card-body"><div class="word-cloud" id="loadedWords"></div></div>
+      </div>
+      <div class="card">
+        <div class="card-head">Missing Perspectives</div>
+        <div class="card-body"><ul class="perspective-list" id="perspectiveList"></ul></div>
+      </div>
+    </div>
+
+    <div class="two-col fade-up">
+      <div class="card">
+        <div class="card-head">Tone Indicators</div>
+        <div class="card-body" id="toneBody"></div>
+      </div>
+      <div class="card">
+        <div class="card-head">Bias Summary</div>
+        <div class="card-body"><p class="card-text" id="biasSummary">—</p></div>
+      </div>
+    </div>
+
+    <div class="reco-card fade-up">
+      <div class="reco-head">Reader Recommendation</div>
+      <div class="reco-body" id="recommendation">—</div>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    <div class="footer-brand">MediaLens — 2025</div>
+    <div class="footer-note">Analysis uses NLP keyword pattern matching. Always verify news with multiple sources. SDG 16: Peace, Justice &amp; Strong Institutions.</div>
+  </div>
+
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+//  MEDIALENS  —  Static NLP Bias Engine
+// ─────────────────────────────────────────────
+
+document.getElementById('todayDate').textContent =
+  new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+
+document.getElementById('articleInput').addEventListener('input', function(){
+  document.getElementById('charCount').textContent = this.value.length + ' chars';
+});
+
+// ── LEXICON ──────────────────────────────────
+
+const LEFT_WORDS = [
+  'progressive','social justice','inequality','marginalized','systemic','oppression',
+  'exploitation','corporate greed','workers rights','union','grassroots','activist',
+  'reform','redistribution','universal healthcare','climate crisis','structural racism',
+  'privilege','equity','inclusion','diversity','intersectional','woke','left-wing',
+  'liberal','democrat','socialism','welfare','public funding','green new deal',
+  'defund','police brutality','occupied','colonized','imperialism'
+];
+
+const RIGHT_WORDS = [
+  'traditional values','law and order','free market','deregulation','tax cuts',
+  'border security','illegal immigration','radical left','socialist','anti-american',
+  'patriot','freedom','second amendment','pro-life','conservative','republican',
+  'big government','deep state','mainstream media','fake news','elites',
+  'globalist','communist','woke agenda','family values','religious freedom',
+  'national security','crime wave','welfare state','make america','drain the swamp',
+  'radical','antifa','leftist','rigged','stolen'
+];
+
+const EMOTIONAL_WORDS = [
+  'outrage','shocking','explosive','bombshell','devastating','horrifying','alarming',
+  'terrifying','scandalous','disgusting','enraging','infuriating','heartbreaking',
+  'unprecedented','catastrophic','crisis','emergency','chaos','disaster','collapse',
+  'dangerous','threat','attack','destroy','slaughter','massacre','betrayal',
+  'shameful','disgraceful','shameless','evil','corrupt','lie','lied','lying',
+  'furious','angry','horrified','stunned','appalled','outraged','fear','panic'
+];
+
+const SENSATIONAL_WORDS = [
+  'breaking','exclusive','bombshell','shocking','stunning','explosive','jaw-dropping',
+  'unbelievable','mind-blowing','incredible','insane','crazy','wild','epic',
+  'historic','massive','huge','giant','enormous','extreme','ultimate','worst ever',
+  'best ever','never before','first time','last time','final','end of','destroys',
+  'obliterates','crushes','slams','rips','blasts','torches','nukes','wrecks'
+];
+
+const FACTUAL_INDICATORS = [
+  'according to','reported','study','research','data','statistics','percent',
+  'survey','analysis','evidence','source','document','record','official',
+  'confirmed','stated','said','announced','released','published','findings',
+  'report','audit','investigation','cited','referenced','measured','showed',
+  'demonstrated','concluded','revealed','indicated','suggested'
+];
+
+const LOADED_HIGH = [
+  'terrorist','extremist','radical','regime','thug','mob','invasion','infestation',
+  'plague','vermin','filth','corrupt','traitor','criminal','illegal','murder',
+  'destruction','apocalypse','fascist','nazi','communist','marxist','propaganda',
+  'brainwash','indoctrinate','grooming','predator','threat','danger','enemy'
+];
+
+const LOADED_MED = [
+  'controversial','disputed','alleged','claimed','so-called','supposedly',
+  'unverified','purported','suspected','accused','questioned','challenged',
+  'divisive','polarizing','problematic','concerning','troubling','alarming',
+  'failed','incompetent','dishonest','biased','misleading','mislead'
+];
+
+const PERSPECTIVES_BANK = {
+  left: [
+    'Corporate and business viewpoints not represented',
+    'Conservative policy alternatives not explored',
+    'Law enforcement perspective absent',
+    'Economic impact on small businesses omitted',
+    'Religious and traditional community voices missing'
+  ],
+  right: [
+    'Progressive activist perspectives not included',
+    'Civil rights and equity implications not addressed',
+    'Environmental impact not considered',
+    'Marginalized community voices absent',
+    'Academic and research perspectives missing'
+  ],
+  neutral: [
+    'Opposing party or stakeholder response not quoted',
+    'Independent expert verification absent',
+    'Historical context and precedent not provided',
+    'International or comparative perspective missing',
+    'Long-term impact analysis not addressed'
+  ],
+  general: [
+    'Multiple sides of the debate not equally weighted',
+    'Affected community voices not directly quoted',
+    'Counterarguments and rebuttals not presented',
+    'Statistical context and baseline data absent',
+    'Timeline and background context insufficient'
+  ]
+};
+
+// ── ANALYSIS ENGINE ───────────────────────────
+
+function countMatches(text, wordList) {
+  const lower = text.toLowerCase();
+  return wordList.filter(w => {
+    const re = new RegExp('\\b' + w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '\\b','i');
+    return re.test(lower);
+  });
+}
+
+function clamp(val, min, max){ return Math.min(max, Math.max(min, val)); }
+
+function analyzeArticle() {
+  const text = document.getElementById('articleInput').value.trim();
+  const errorBox = document.getElementById('errorBox');
+  errorBox.style.display = 'none';
+
+  if (!text || text.length < 40) {
+    errorBox.textContent = 'Please paste a news article or paragraph (at least 40 characters) to analyze.';
+    errorBox.style.display = 'block';
+    return;
+  }
+
+  const words = text.split(/\s+/).length;
+  const lower = text.toLowerCase();
+
+  // Counts
+  const leftMatches   = countMatches(text, LEFT_WORDS);
+  const rightMatches  = countMatches(text, RIGHT_WORDS);
+  const emotMatches   = countMatches(text, EMOTIONAL_WORDS);
+  const sensMatches   = countMatches(text, SENSATIONAL_WORDS);
+  const factMatches   = countMatches(text, FACTUAL_INDICATORS);
+  const highLoaded    = countMatches(text, LOADED_HIGH);
+  const medLoaded     = countMatches(text, LOADED_MED);
+
+  const leftScore  = leftMatches.length;
+  const rightScore = rightMatches.length;
+  const total      = leftScore + rightScore;
+
+  // ── BIAS POSITION (0=left, 100=right) ──
+  let biasPos = 50;
+  if (total > 0) {
+    biasPos = clamp(Math.round(50 + ((rightScore - leftScore) / (total + 2)) * 45), 5, 95);
+  }
+
+  // ── OVERALL BIAS LABEL ──
+  let overallBias;
+  if      (biasPos <= 15) overallBias = 'Far Left';
+  else if (biasPos <= 30) overallBias = 'Left-Leaning';
+  else if (biasPos <= 42) overallBias = 'Center-Left';
+  else if (biasPos <= 58) overallBias = 'Neutral / Center';
+  else if (biasPos <= 70) overallBias = 'Center-Right';
+  else if (biasPos <= 85) overallBias = 'Right-Leaning';
+  else                    overallBias = 'Far Right';
+
+  // ── SCORES ──
+  const emotionalScore  = clamp(Math.round((emotMatches.length / Math.max(words, 1)) * 300 + emotMatches.length * 0.8), 1, 10);
+  const sensationalScore= clamp(Math.round((sensMatches.length / Math.max(words, 1)) * 250 + sensMatches.length * 0.7), 1, 10);
+  const factualScore    = clamp(Math.round((factMatches.length / Math.max(words, 1)) * 200 + factMatches.length * 0.6), 1, 10);
+  const loadedPenalty   = highLoaded.length * 1.2 + medLoaded.length * 0.6;
+  const balanceScore    = clamp(10 - Math.round(Math.abs(leftScore - rightScore) * 0.8 + loadedPenalty * 0.4), 1, 10);
+
+  // ── CREDIBILITY ──
+  const credRaw = 65 + factualScore * 3 - emotionalScore * 2 - sensationalScore * 2 - highLoaded.length * 3;
+  const credScore = clamp(Math.round(credRaw), 10, 98);
+  const credLabel = credScore >= 75 ? 'High' : credScore >= 50 ? 'Moderate' : 'Low';
+
+  // ── LOADED WORDS (deduplicated, max 12) ──
+  const allLoaded = [
+    ...highLoaded.map(w=>({word:w,severity:'high'})),
+    ...medLoaded.map(w=>({word:w,severity:'med'})),
+    ...emotMatches.slice(0,4).map(w=>({word:w,severity:'med'})),
+    ...sensMatches.slice(0,3).map(w=>({word:w,severity:'low'}))
+  ];
+  const seen = new Set();
+  const loadedWords = allLoaded.filter(w => {
+    if (seen.has(w.word.toLowerCase())) return false;
+    seen.add(w.word.toLowerCase()); return true;
+  }).slice(0, 12);
+
+  // ── MISSING PERSPECTIVES ──
+  const perspPool = biasPos < 42 ? [...PERSPECTIVES_BANK.left, ...PERSPECTIVES_BANK.neutral]
+                  : biasPos > 58 ? [...PERSPECTIVES_BANK.right, ...PERSPECTIVES_BANK.neutral]
+                  : [...PERSPECTIVES_BANK.neutral, ...PERSPECTIVES_BANK.general];
+  const missingPerspectives = perspPool.sort(()=>Math.random()-.5).slice(0, 3);
+
+  // ── TONE INDICATORS ──
+  const toneIndicators = [];
+  if (emotionalScore >= 6) toneIndicators.push({label:'High emotional charge',color:'#ef4444'});
+  if (sensationalScore >= 5) toneIndicators.push({label:'Sensationalist framing',color:'#f59e0b'});
+  if (factualScore >= 5) toneIndicators.push({label:'Evidence-based language',color:'#22c55e'});
+  if (highLoaded.length > 0) toneIndicators.push({label:'Loaded / charged vocabulary',color:'#c0392b'});
+  if (balanceScore >= 7) toneIndicators.push({label:'Relatively balanced framing',color:'#3b82f6'});
+  if (total === 0) toneIndicators.push({label:'No strong political keywords detected',color:'#888'});
+
+  // ── BIAS SUMMARY ──
+  const summaries = {
+    'Far Left': `This text exhibits strong left-wing framing through repeated use of progressive terminology and social justice language. The narrative centers around systemic critique and advocacy language, with little to no representation of conservative or centrist viewpoints.`,
+    'Left-Leaning': `The text leans left, using language associated with progressive politics and social reform. Keywords suggest a preference for structural change narratives. Opposing viewpoints and market-based perspectives are underrepresented.`,
+    'Center-Left': `A mild left-of-center lean is detected. The text uses some progressive framing but maintains relative balance. Some loaded language is present, though the overall tone appears moderately objective.`,
+    'Neutral / Center': `The analysis detects no strong political lean in this text. Language use appears balanced across ideological lines. Factual indicators suggest an attempt at objective reporting, though some emotional language may be present.`,
+    'Center-Right': `A mild right-of-center bias is detected. The text uses some conservative framing — emphasizing security, tradition, or economic freedom — while largely avoiding extreme rhetoric. Balance could be improved by including progressive perspectives.`,
+    'Right-Leaning': `The text leans right, using vocabulary associated with conservative values, national security, or free-market principles. Left-leaning or progressive viewpoints are minimally represented, creating an imbalanced narrative.`,
+    'Far Right': `Strong right-wing framing is detected through use of charged nationalist, populist, or anti-establishment vocabulary. The text exhibits little ideological balance and may be intended for a partisan audience.`
+  };
+
+  const recommendations = {
+    'Far Left': `Cross-reference this article with center or right-leaning outlets before forming a conclusion. Look for market perspectives and institutional viewpoints that may be missing. Treat advocacy framing with additional scrutiny.`,
+    'Left-Leaning': `Supplement this article with reporting from centrist or center-right sources for a fuller picture. Pay attention to how conservative stakeholders have responded to the same events. Look for data and official statements.`,
+    'Center-Left': `This article is relatively balanced but has a mild progressive lean. Read it alongside center-right coverage for perspective. Verify specific claims with primary sources or official data where possible.`,
+    'Neutral / Center': `This article appears relatively objective. Still, no reporting is entirely neutral — consider who was quoted and who was not. Verify key statistics independently and check for context that may be missing.`,
+    'Center-Right': `Supplement with center-left or progressive coverage to get the full picture. Pay attention to whose voices are centred and whose are absent. Verify claims against official records and independent research.`,
+    'Right-Leaning': `Cross-reference with centrist or left-leaning outlets before forming a conclusion. Pay attention to missing perspectives — particularly from civil society, researchers, and affected communities.`,
+    'Far Right': `Exercise significant caution with this article. Strong partisan framing limits its objectivity. Verify every major claim independently using primary sources, and seek out coverage from multiple ideologically diverse outlets.`
+  };
+
+  renderResults({
+    overallBias, biasPos, credScore, credLabel,
+    emotionalScore, factualScore, sensationalScore, balanceScore,
+    loadedWords, missingPerspectives, toneIndicators,
+    biasSummary: summaries[overallBias],
+    recommendation: recommendations[overallBias]
+  });
+}
+
+// ── RENDER ─────────────────────────────────────
+
+function renderResults(r) {
+  document.getElementById('analysisTime').textContent =
+    'Analyzed ' + new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+
+  // Verdict
+  document.getElementById('verdictText').textContent = r.overallBias;
+  document.getElementById('credScore').textContent = r.credScore;
+  document.getElementById('credLabel').textContent = r.credLabel;
+  const credEl = document.getElementById('credScore');
+  credEl.style.color = r.credScore >= 70 ? 'var(--green)' : r.credScore >= 45 ? 'var(--amber)' : 'var(--red)';
+
+  // Needle
+  setTimeout(()=>{ document.getElementById('meterNeedle').style.left = r.biasPos + '%'; }, 80);
+  document.getElementById('meterReading').textContent = r.overallBias;
+
+  // Metric bars
+  const setM = (valId, barId, val, delay) => {
+    document.getElementById(valId).textContent = val;
+    setTimeout(()=>{ document.getElementById(barId).style.width = (val * 10) + '%'; }, delay);
+  };
+  setM('mEmotional','bEmotional', r.emotionalScore, 250);
+  setM('mFactual','bFactual', r.factualScore, 350);
+  setM('mSensational','bSensational', r.sensationalScore, 450);
+  setM('mBalance','bBalance', r.balanceScore, 550);
+
+  // Loaded words
+  const lwEl = document.getElementById('loadedWords');
+  lwEl.innerHTML = '';
+  if (r.loadedWords.length) {
+    r.loadedWords.forEach(w => {
+      const span = document.createElement('span');
+      span.className = 'word-pill ' + w.severity;
+      span.textContent = w.word;
+      lwEl.appendChild(span);
+    });
+  } else {
+    lwEl.innerHTML = '<span class="word-pill neutral">No charged words detected</span>';
+  }
+
+  // Perspectives
+  const plEl = document.getElementById('perspectiveList');
+  plEl.innerHTML = '';
+  r.missingPerspectives.forEach(p => {
+    const li = document.createElement('li');
+    li.innerHTML = '<span class="pdot"></span><span>' + p + '</span>';
+    plEl.appendChild(li);
+  });
+
+  // Tone indicators
+  const toneEl = document.getElementById('toneBody');
+  toneEl.innerHTML = '';
+  r.toneIndicators.forEach(t => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:.6rem;padding:.45rem 0;border-bottom:1px solid var(--border)';
+    row.innerHTML =
+      `<span style="width:8px;height:8px;border-radius:50%;background:${t.color};flex-shrink:0;display:inline-block"></span>
+       <span style="font-family:inherit;font-size:.9rem;opacity:.78">${t.label}</span>`;
+    toneEl.appendChild(row);
+  });
+
+  // Summary + reco
+  document.getElementById('biasSummary').textContent = r.biasSummary;
+  document.getElementById('recommendation').textContent = r.recommendation;
+
+  // Show + scroll
+  const res = document.getElementById('results');
+  res.style.display = 'block';
+  res.scrollIntoView({behavior:'smooth', block:'start'});
+}
+</script>
+</body>
+</html>
