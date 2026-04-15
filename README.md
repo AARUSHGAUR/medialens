@@ -36,10 +36,16 @@ MediaLens is a lightweight, browser-based tool that analyzes news articles to de
 
 ## 🛠️ Tech Stack
 
-* **Frontend:** HTML, CSS, JavaScript
-* **Logic:** Rule-based NLP (keyword pattern matching)
-* **Deployment:** Vercel
-* **Version Control:** GitHub
+Frontend:
+- HTML, CSS, JavaScript (Vanilla)
+
+Text Analysis Engine:
+- Rule-based NLP (Lexicon-based classification)
+- Keyword frequency analysis
+- Regex-based pattern matching
+
+Deployment:
+- Vercel
 
 ---
 
